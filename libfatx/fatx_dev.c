@@ -22,56 +22,66 @@
 /*
  * Seek to a byte offset in the device.
  */
-int fatx_dev_seek(struct fatx_fs *fs, uint64_t offset)
-{
-    int status;
+int fatx_dev_seek(struct fatx_fs *fs, uint64_t offset) {
+  int status;
+
+  if (fs->io_ops && fs->io_ops->seek) {
+    return fs->io_ops->seek(fs->io_ctx, offset);
+  }
 
 #ifdef _WIN32
-    status = _fseeki64(fs->device, offset, SEEK_SET);
+  status = _fseeki64(fs->device, offset, SEEK_SET);
 #else
-    status = fseeko(fs->device, offset, SEEK_SET);
+  status = fseeko(fs->device, offset, SEEK_SET);
 #endif
-    if (status)
-    {
-        fatx_error(fs, "failed to seek\n");
-        return FATX_STATUS_ERROR;
-    }
+  if (status) {
+    fatx_error(fs, "failed to seek\n");
+    return FATX_STATUS_ERROR;
+  }
 
-    return FATX_STATUS_SUCCESS;
+  return FATX_STATUS_SUCCESS;
 }
 
 /*
  * Seek to a cluster + byte offset in the device.
  */
-int fatx_dev_seek_cluster(struct fatx_fs *fs, size_t cluster, off_t offset)
-{
-    int status;
-    uint64_t pos;
+int fatx_dev_seek_cluster(struct fatx_fs *fs, size_t cluster, off_t offset) {
+  int status;
+  uint64_t pos;
 
-    fatx_debug(fs, "fatx_dev_seek_cluster(cluster=%zd, offset=0x%zx)\n", cluster, offset);
+  fatx_debug(fs, "fatx_dev_seek_cluster(cluster=%zd, offset=0x%zx)\n", cluster,
+             offset);
 
-    status = fatx_cluster_number_to_byte_offset(fs, cluster, &pos);
-    if (status) return status;
+  status = fatx_cluster_number_to_byte_offset(fs, cluster, &pos);
+  if (status)
+    return status;
 
-    pos += offset;
+  pos += offset;
 
-    return fatx_dev_seek(fs, pos);
+  return fatx_dev_seek(fs, pos);
 }
 
 /*
  * Read from the device.
  */
-size_t fatx_dev_read(struct fatx_fs *fs, void *buf, size_t size, size_t items)
-{
-    fatx_debug(fs, "fatx_dev_read(buf=0x%p, size=0x%zx, items=0x%zx)\n", buf, size, items);
-    return fread(buf, size, items, fs->device);
+size_t fatx_dev_read(struct fatx_fs *fs, void *buf, size_t size, size_t items) {
+  fatx_debug(fs, "fatx_dev_read(buf=0x%p, size=0x%zx, items=0x%zx)\n", buf,
+             size, items);
+  if (fs->io_ops && fs->io_ops->read) {
+    return fs->io_ops->read(fs->io_ctx, buf, size, items);
+  }
+  return fread(buf, size, items, fs->device);
 }
 
 /*
  * Write to the device.
  */
-size_t fatx_dev_write(struct fatx_fs *fs, const void *buf, size_t size, size_t items)
-{
-    fatx_debug(fs, "fatx_dev_write(buf=0x%p, size=0x%zx, items=0x%zx)\n", buf, size, items);
-    return fwrite(buf, size, items, fs->device);
+size_t fatx_dev_write(struct fatx_fs *fs, const void *buf, size_t size,
+                      size_t items) {
+  fatx_debug(fs, "fatx_dev_write(buf=0x%p, size=0x%zx, items=0x%zx)\n", buf,
+             size, items);
+  if (fs->io_ops && fs->io_ops->write) {
+    return fs->io_ops->write(fs->io_ctx, buf, size, items);
+  }
+  return fwrite(buf, size, items, fs->device);
 }

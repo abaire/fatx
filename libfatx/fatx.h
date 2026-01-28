@@ -20,10 +20,10 @@
 #ifndef FATX_H
 #define FATX_H
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -33,21 +33,21 @@ extern "C" {
 
 #include "fatx_log.h"
 
-#define FATX_MAX_FILENAME_LEN        42
-#define FATX_ATTR_READ_ONLY          (1<<0)
-#define FATX_ATTR_SYSTEM             (1<<1)
-#define FATX_ATTR_HIDDEN             (1<<2)
-#define FATX_ATTR_VOLUME             (1<<3)
-#define FATX_ATTR_DIRECTORY          (1<<4)
+#define FATX_MAX_FILENAME_LEN 42
+#define FATX_ATTR_READ_ONLY (1 << 0)
+#define FATX_ATTR_SYSTEM (1 << 1)
+#define FATX_ATTR_HIDDEN (1 << 2)
+#define FATX_ATTR_VOLUME (1 << 3)
+#define FATX_ATTR_DIRECTORY (1 << 4)
 
-#define FATX_STATUS_FILE_NOT_FOUND  -2
-#define FATX_STATUS_ERROR           -1
-#define FATX_STATUS_SUCCESS          0
-#define FATX_STATUS_FILE_DELETED     1
-#define FATX_STATUS_END_OF_DIR       2
+#define FATX_STATUS_FILE_NOT_FOUND -2
+#define FATX_STATUS_ERROR -1
+#define FATX_STATUS_SUCCESS 0
+#define FATX_STATUS_FILE_DELETED 1
+#define FATX_STATUS_END_OF_DIR 2
 
-#define FATX_RETAIL_CLUSTER_SIZE     (16 * 1024)
-#define FATX_RETAIL_PARTITION_COUNT  5
+#define FATX_RETAIL_CLUSTER_SIZE (16 * 1024)
+#define FATX_RETAIL_PARTITION_COUNT 5
 
 /*
  * This define should always be passed to fatx_open_device(...) as the
@@ -61,65 +61,80 @@ extern "C" {
  * when formatting a new disk. In this case, the caller is expected to pass
  * pass a valid non-zero sectors_per_cluster to format the partition with.
  */
-#define FATX_READ_FROM_SUPERBLOCK    0
+#define FATX_READ_FROM_SUPERBLOCK 0
 
-#define FATX_FAT_CACHE_NUM_ENTRIES   512
+#define FATX_FAT_CACHE_NUM_ENTRIES 512
+
+typedef size_t (*fatx_read_cb)(void *ctx, void *buf, size_t size, size_t items);
+typedef size_t (*fatx_write_cb)(void *ctx, const void *buf, size_t size,
+                                size_t items);
+typedef int (*fatx_seek_cb)(void *ctx, uint64_t offset);
+typedef uint64_t (*fatx_tell_cb)(void *ctx);
+
+struct fatx_io_ops {
+  fatx_read_cb read;
+  fatx_write_cb write;
+  fatx_seek_cb seek;
+  fatx_tell_cb tell;
+};
 
 struct fatx_cache {
-    size_t position;
-    size_t entries;
-    size_t entry_size;
-    bool   dirty;
-    void  *data;
+  size_t position;
+  size_t entries;
+  size_t entry_size;
+  bool dirty;
+  void *data;
 };
 
 struct fatx_fs {
-    char const       *device_path;
-    FILE             *device;
-    size_t            sector_size;
-    uint64_t          partition_offset;
-    uint64_t          partition_size;
-    uint32_t          volume_id;
-    uint64_t          num_sectors;
-    uint32_t          num_clusters;
-    uint32_t          sectors_per_cluster;
-    uint8_t           fat_type;
-    uint64_t          fat_offset;
-    size_t            fat_size;
-    size_t            root_cluster;
-    uint64_t          cluster_offset;
-    size_t            bytes_per_cluster;
-    FILE             *log_handle;
-    int               log_level;
-    struct fatx_cache fat_cache;
+  char const *device_path;
+  FILE *device;
+  struct fatx_io_ops *io_ops;
+  void *io_ctx;
+  size_t sector_size;
+  uint64_t partition_offset;
+  uint64_t partition_size;
+  uint32_t volume_id;
+  uint64_t num_sectors;
+  uint32_t num_clusters;
+  uint32_t sectors_per_cluster;
+  uint8_t fat_type;
+  uint64_t fat_offset;
+  size_t fat_size;
+  size_t root_cluster;
+  uint64_t cluster_offset;
+  size_t bytes_per_cluster;
+  FILE *log_handle;
+  int log_level;
+  struct fatx_cache fat_cache;
 };
 
 struct fatx_dir {
-    size_t cluster;
-    size_t entry;
+  size_t cluster;
+  size_t entry;
 };
 
 struct fatx_ts {
-    uint16_t year;
-    uint8_t  month; // 1 = January
-    uint8_t  day;
-    uint8_t  hour;
-    uint8_t  minute;
-    uint8_t  second;
+  uint16_t year;
+  uint8_t month; // 1 = January
+  uint8_t day;
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t second;
 };
 
 struct fatx_dirent {
-    char filename[FATX_MAX_FILENAME_LEN+1];
+  char filename[FATX_MAX_FILENAME_LEN + 1];
 };
 
 struct fatx_attr {
-    char           filename[FATX_MAX_FILENAME_LEN+1];
-    uint8_t        attributes;
-    size_t         first_cluster;
-    size_t         file_size;
-    struct fatx_ts modified;
-    struct fatx_ts created;
-    struct fatx_ts accessed;
+  char filename[FATX_MAX_FILENAME_LEN + 1];
+  uint8_t attributes;
+  size_t first_cluster;
+  size_t file_size;
+  struct fatx_ts modified;
+  struct fatx_ts created;
+  struct fatx_ts accessed;
 };
 
 /*
@@ -127,49 +142,68 @@ struct fatx_attr {
  */
 
 struct fatx_partition_map_entry {
-    char     letter;
-    uint64_t offset;
-    uint64_t size;
+  char letter;
+  uint64_t offset;
+  uint64_t size;
 };
 
 enum fatx_format {
-    FATX_FORMAT_INVALID,
-    FATX_FORMAT_RETAIL,
-    FATX_FORMAT_F_TAKES_ALL
+  FATX_FORMAT_INVALID,
+  FATX_FORMAT_RETAIL,
+  FATX_FORMAT_F_TAKES_ALL
 };
 
 /* FATX Functions */
-int fatx_open_device(struct fatx_fs *fs, char const *path, uint64_t offset, uint64_t size, size_t sector_size, size_t sectors_per_cluster);
+int fatx_open_device(struct fatx_fs *fs, char const *path, uint64_t offset,
+                     uint64_t size, size_t sector_size,
+                     size_t sectors_per_cluster);
+int fatx_mount_custom(struct fatx_fs *fs, struct fatx_io_ops *ops, void *io_ctx,
+                      uint64_t offset, uint64_t size, size_t sector_size,
+                      size_t sectors_per_cluster);
 int fatx_close_device(struct fatx_fs *fs);
 int fatx_open_dir(struct fatx_fs *fs, char const *path, struct fatx_dir *dir);
-int fatx_read_dir(struct fatx_fs *fs, struct fatx_dir *dir, struct fatx_dirent *entry, struct fatx_attr *attr, struct fatx_dirent **result);
-int fatx_write_dir(struct fatx_fs *fs, struct fatx_dir *dir, struct fatx_dirent *entry, struct fatx_attr *attr);
+int fatx_read_dir(struct fatx_fs *fs, struct fatx_dir *dir,
+                  struct fatx_dirent *entry, struct fatx_attr *attr,
+                  struct fatx_dirent **result);
+int fatx_write_dir(struct fatx_fs *fs, struct fatx_dir *dir,
+                   struct fatx_dirent *entry, struct fatx_attr *attr);
 int fatx_next_dir_entry(struct fatx_fs *fs, struct fatx_dir *dir);
 int fatx_alloc_dir_entry(struct fatx_fs *fs, struct fatx_dir *dir);
 int fatx_close_dir(struct fatx_fs *fs, struct fatx_dir *dir);
 int fatx_get_attr(struct fatx_fs *fs, char const *path, struct fatx_attr *attr);
 int fatx_set_attr(struct fatx_fs *fs, char const *path, struct fatx_attr *attr);
-int fatx_attr_atomic_swap(struct fatx_fs *fs, char const *dir1, char const *base1, char const *dir2, char const *base2);
+int fatx_attr_atomic_swap(struct fatx_fs *fs, char const *dir1,
+                          char const *base1, char const *dir2,
+                          char const *base2);
 int fatx_utime(struct fatx_fs *fs, char const *path, struct fatx_ts ts[2]);
-int fatx_read(struct fatx_fs *fs, char const *path, off_t offset, size_t size, void *buf);
-int fatx_write(struct fatx_fs *fs, char const *path, off_t offset, size_t size, const void *buf);
-int fatx_create_dirent(struct fatx_fs *fs, char const *path, struct fatx_dir *dir, uint8_t attributes);
+int fatx_read(struct fatx_fs *fs, char const *path, off_t offset, size_t size,
+              void *buf);
+int fatx_write(struct fatx_fs *fs, char const *path, off_t offset, size_t size,
+               const void *buf);
+int fatx_create_dirent(struct fatx_fs *fs, char const *path,
+                       struct fatx_dir *dir, uint8_t attributes);
 int fatx_unlink(struct fatx_fs *fs, char const *path);
 int fatx_mkdir(struct fatx_fs *fs, char const *path);
 int fatx_rmdir(struct fatx_fs *fs, char const *path);
 int fatx_mknod(struct fatx_fs *fs, char const *path);
 int fatx_truncate(struct fatx_fs *fs, char const *path, off_t offset);
-int fatx_rename(struct fatx_fs *fs, char const *from, char const *to, bool exchange, bool no_replace);
+int fatx_rename(struct fatx_fs *fs, char const *from, char const *to,
+                bool exchange, bool no_replace);
 void fatx_time_t_to_fatx_ts(const time_t in, struct fatx_ts *out);
 time_t fatx_ts_to_time_t(const struct fatx_ts *in);
 
 /* Disk Functions */
 int fatx_disk_size(char const *path, uint64_t *size);
 int fatx_disk_size_remaining(char const *path, uint64_t offset, uint64_t *size);
-int fatx_disk_format(struct fatx_fs *fs, char const *path, size_t sector_size, enum fatx_format format_type, size_t sectors_per_cluster);
-int fatx_disk_format_partition(struct fatx_fs *fs, char const *path, uint64_t offset, uint64_t size, size_t sector_size, size_t sectors_per_cluster);
-int fatx_drive_to_offset_size(char drive_letter, uint64_t *offset, uint64_t *size);
-int fatx_disk_write_refurb_info(char const *path, uint32_t number_of_boots, uint64_t first_power_on);
+int fatx_disk_format(struct fatx_fs *fs, char const *path, size_t sector_size,
+                     enum fatx_format format_type, size_t sectors_per_cluster);
+int fatx_disk_format_partition(struct fatx_fs *fs, char const *path,
+                               uint64_t offset, uint64_t size,
+                               size_t sector_size, size_t sectors_per_cluster);
+int fatx_drive_to_offset_size(char drive_letter, uint64_t *offset,
+                              uint64_t *size);
+int fatx_disk_write_refurb_info(char const *path, uint32_t number_of_boots,
+                                uint64_t first_power_on);
 
 /* Misc Functions */
 char *fatx_dirname(const char *path);

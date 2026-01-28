@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import functools
 import os
+import random
 import tempfile
 import unittest
-import random
 
 from pyfatx import Fatx
 
@@ -98,7 +98,7 @@ class BasicTest(unittest.TestCase):
 		rng = random.Random()
 		rng.seed(12345)
 		b = bytes([rng.getrandbits(8) for _ in range(1024 * 1024)])
-		
+
 		fs.write(test_file_path, b)
 
 		d = fs.read(test_file_path)
@@ -106,7 +106,7 @@ class BasicTest(unittest.TestCase):
 
 		assert d == b
 
-	
+
 	@with_formatted_disk
 	def test_write_offset(self, path):
 		test_file_path = '/offsetfile'
@@ -199,7 +199,7 @@ class BasicTest(unittest.TestCase):
 	def test_rename_exchange_different_dirname_overwrite(self, path):
 		test_file1 = '/test_xchg1'
 		file2_dir = '/testdir'
-		test_file2 = '{}/test_xchg2'.format(file2_dir)
+		test_file2 = f'{file2_dir}/test_xchg2'
 		fs = Fatx(path)
 
 		fs.mkdir(file2_dir)
@@ -220,7 +220,7 @@ class BasicTest(unittest.TestCase):
 
 		fs.unlink(test_file1)
 		fs.unlink(test_file2)
-		
+
 		fs.rmdir(file2_dir)
 
 		assert d1 == b2
@@ -231,7 +231,7 @@ class BasicTest(unittest.TestCase):
 	def test_rename_different_dirname_overwrite(self, path):
 		test_file1 = '/test_xchg1'
 		file2_dir = '/testdir'
-		test_file2 = '{}/test_xchg2'.format(file2_dir)
+		test_file2 = f'{file2_dir}/test_xchg2'
 		fs = Fatx(path)
 
 		fs.mkdir(file2_dir)
@@ -267,7 +267,7 @@ class BasicTest(unittest.TestCase):
 	def test_rename_different_dirname_nonexisting(self, path):
 		test_file1 = '/test_xchg1'
 		file2_dir = '/testdir'
-		test_file2 = '{}/test_xchg2'.format(file2_dir)
+		test_file2 = f'{file2_dir}/test_xchg2'
 		fs = Fatx(path)
 
 		fs.mkdir(file2_dir)
@@ -300,7 +300,7 @@ class BasicTest(unittest.TestCase):
 	def test_rename_no_replace_different_dirname_nonexisting(self, path):
 		test_file1 = '/test_xchg1'
 		file2_dir = '/testdir'
-		test_file2 = '{}/test_xchg2'.format(file2_dir)
+		test_file2 = f'{file2_dir}/test_xchg2'
 		fs = Fatx(path)
 
 		fs.mkdir(file2_dir)
@@ -333,7 +333,7 @@ class BasicTest(unittest.TestCase):
 	def test_rename_no_replace_different_dirname_existing_fails(self, path):
 		test_file1 = '/test_xchg1'
 		file2_dir = '/testdir'
-		test_file2 = '{}/test_xchg2'.format(file2_dir)
+		test_file2 = f'{file2_dir}/test_xchg2'
 		fs = Fatx(path)
 
 		fs.mkdir(file2_dir)

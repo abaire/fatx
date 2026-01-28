@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import os
 import shutil
+
 from setuptools import setup
-from setuptools.command.build_py import build_py as _build_py
 from setuptools.command.sdist import sdist as _sdist
 
 

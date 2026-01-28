@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 import os.path
+import platform
 import shutil
 import struct
 import subprocess
-import platform
-from distutils.command.build_ext import build_ext
-
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 LIBFATX_DIR = os.path.join(ROOT_DIR, 'libfatx')
@@ -127,6 +125,20 @@ def ffibuilder():
         int fatx_disk_format_partition(struct fatx_fs *fs, char const *path, uint64_t offset, uint64_t size, size_t sector_size, size_t sectors_per_cluster);
         int fatx_drive_to_offset_size(char drive_letter, uint64_t *offset, uint64_t *size);
         int fatx_disk_write_refurb_info(char const *path, uint32_t number_of_boots, uint64_t first_power_on);
+
+        typedef size_t (*fatx_read_cb)(void *ctx, void *buf, size_t size, size_t items);
+        typedef size_t (*fatx_write_cb)(void *ctx, const void *buf, size_t size, size_t items);
+        typedef int (*fatx_seek_cb)(void *ctx, uint64_t offset);
+        typedef uint64_t (*fatx_tell_cb)(void *ctx);
+
+        struct fatx_io_ops {
+            fatx_read_cb  read;
+            fatx_write_cb write;
+            fatx_seek_cb  seek;
+            fatx_tell_cb  tell;
+        };
+
+        int fatx_mount_custom(struct fatx_fs *fs, struct fatx_io_ops *ops, void *io_ctx, uint64_t offset, uint64_t size, size_t sector_size, size_t sectors_per_cluster);
         """)
     return ffi
 

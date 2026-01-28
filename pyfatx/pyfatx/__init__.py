@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
+import logging
 import os
 import platform
 import subprocess
-import logging
-from typing import AnyStr, Generator, Optional, Sequence, Tuple
+from collections.abc import Generator, Sequence
+from typing import AnyStr, Optional, Tuple
 
+from .__version__ import __version__
 from .libfatx import ffi
 from .libfatx.lib import *
-from .__version__ import __version__
 
 log = logging.getLogger(__name__)
 
@@ -51,27 +52,101 @@ class FatxAttr:
 		return f'<FatxAttr name={self.filename} attr={attr_desc} size={self.file_size:#x}>'
 
 
+@ffi.callback("size_t(void *, void *, size_t, size_t)")
+def pyfatx_read_cb(ctx, buf, size, items):
+    try:
+        obj = ffi.from_handle(ctx)
+        s = size * items
+        data = obj.read(s)
+        read_len = len(data)
+        ffi.memmove(buf, data, read_len)
+        return read_len // size
+    except Exception:
+        return 0
+
+@ffi.callback("size_t(void *, void *, size_t, size_t)")
+def pyfatx_write_cb(ctx, buf, size, items):
+    try:
+        obj = ffi.from_handle(ctx)
+        s = size * items
+        data = ffi.buffer(buf, s)[:]
+        obj.write(data)
+        return items
+    except Exception:
+        return 0
+
+@ffi.callback("int(void *, uint64_t)")
+def pyfatx_seek_cb(ctx, offset):
+    try:
+        obj = ffi.from_handle(ctx)
+        obj.seek(offset)
+        return 0 # Success
+    except Exception:
+        return -1 # FATX_STATUS_ERROR
+
+@ffi.callback("uint64_t(void *)")
+def pyfatx_tell_cb(ctx):
+    try:
+        obj = ffi.from_handle(ctx)
+        return obj.tell()
+    except Exception:
+        return 0
+
+
 class Fatx:
 	"""
 	FATX Filesystem Interface
 	"""
 
-	def __init__(self, path: str, offset: Optional[int] = None, size: Optional[int] = None, drive: str = 'c',
+	def __init__(self, path: Union[str, BinaryIO], offset: int | None = None, size: int | None = None, drive: str = 'c',
 		         sector_size: int = 512):
 		self.fs = pyfatx_open_helper()
 		assert self.fs
-		if offset is None:
-			partitions = {
-				'x': (0x00080000, 0x02ee00000),
-				'y': (0x2ee80000, 0x02ee00000),
-				'z': (0x5dc80000, 0x02ee00000),
-				'c': (0x8ca80000, 0x01f400000),
-				'e': (0xabe80000, 0x1312d6000),
-			}
-			offset, size = partitions[drive]
-		if isinstance(path, str):
-			path = path.encode('utf-8')
-		s = fatx_open_device(self.fs, path, offset, size, sector_size, 0)
+
+		if hasattr(path, 'read') and hasattr(path, 'seek'):
+			self.file_obj = path
+			self.io_handle = ffi.new_handle(self.file_obj)
+			self.io_ops = ffi.new("struct fatx_io_ops *")
+			self.io_ops.read = pyfatx_read_cb
+			self.io_ops.write = pyfatx_write_cb
+			self.io_ops.seek = pyfatx_seek_cb
+			self.io_ops.tell = pyfatx_tell_cb
+
+			if offset is None:
+				partitions = {
+					'x': (0x00080000, 0x02ee00000),
+					'y': (0x2ee80000, 0x02ee00000),
+					'z': (0x5dc80000, 0x02ee00000),
+					'c': (0x8ca80000, 0x01f400000),
+					'e': (0xabe80000, 0x1312d6000),
+				}
+				offset, size = partitions[drive]
+
+			if size is None:
+				if hasattr(path, 'size'):
+					size = path.size
+				else:
+					# Try to determine size by seeking
+					cur = path.tell()
+					path.seek(0, 2)
+					size = path.tell()
+					path.seek(cur)
+
+			s = fatx_mount_custom(self.fs, self.io_ops, self.io_handle, offset, size, sector_size, 0)
+		else:
+			if offset is None:
+				partitions = {
+					'x': (0x00080000, 0x02ee00000),
+					'y': (0x2ee80000, 0x02ee00000),
+					'z': (0x5dc80000, 0x02ee00000),
+					'c': (0x8ca80000, 0x01f400000),
+					'e': (0xabe80000, 0x1312d6000),
+				}
+				offset, size = partitions[drive]
+			if isinstance(path, str):
+				path = path.encode('utf-8')
+			s = fatx_open_device(self.fs, path, offset, size, sector_size, 0)
+
 		if s != 0:
 			self.fs = None
 		assert s == 0
@@ -130,7 +205,7 @@ class Fatx:
 		s = fatx_close_dir(self.fs, d)
 		assert s == 0
 
-	def walk(self, path: str) -> Generator[Tuple[str, Sequence[FatxAttr], Sequence[FatxAttr]], None, None]:
+	def walk(self, path: str) -> Generator[tuple[str, Sequence[FatxAttr], Sequence[FatxAttr]], None, None]:
 		"""
 		Walk the filesystem.
 		"""
@@ -141,7 +216,7 @@ class Fatx:
 		for d in dirnames:
 			yield from self.walk(os.path.join(path, d))
 
-	def read(self, path: str, offset: int = 0, size: Optional[int] = None) -> bytes:
+	def read(self, path: str, offset: int = 0, size: int | None = None) -> bytes:
 		"""
 		Read a file.
 		"""
@@ -276,16 +351,16 @@ class Fatx:
 		Create a disk image.
 		"""
 		if os.path.exists(path):
-			raise FileExistsError()
+			raise FileExistsError
 
 		log.info('Creating empty disk image at %s...', path)
 		plat = platform.system()
 		if plat == 'Windows':
 			subprocess.run(['fsutil', 'file', 'createnew', path, str(size)], check=True)
 		elif plat == 'Linux':
-			subprocess.run(['fallocate', '-l', str(size), path])
+			subprocess.run(['fallocate', '-l', str(size), path], check=False)
 		elif plat == 'Darwin':
-			subprocess.run(['mkfile', '-n', str(size), path])
+			subprocess.run(['mkfile', '-n', str(size), path], check=False)
 		else:
 			assert False
 

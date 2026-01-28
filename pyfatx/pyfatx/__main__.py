@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-import os
 import argparse
 import hashlib
 import logging
+import os
 
 from pyfatx import Fatx
-
 
 logging.basicConfig(level=logging.INFO)
 
